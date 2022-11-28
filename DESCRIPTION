@@ -12,11 +12,11 @@ Language: es
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.2
 Imports: 
-    dplyr,
+    DescTools,
     ggplot2,
     magrittr,
     patchwork,
-    plyr,
     purrr,
     stringi,
-    tidyr
+    tidyr,
+    dplyr

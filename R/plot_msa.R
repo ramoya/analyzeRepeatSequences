@@ -10,7 +10,6 @@
 #' @name %>%
 #' @rdname pipe
 #' @export
-#' @importFrom stats lag
 
 # Functions
 #' @export
@@ -60,14 +59,17 @@ plot_msa <- function(unitorders_df, ascii_conversion_df, unit_color_msa_df, cons
   # Assign levels of unit sequences to get colors and sample order right
   unitorders_df$seq = factor(unitorders_df$seq, levels = ranked_units_in_plot)
 
+  print(typeof(unit_counts_calculated_plus_colors_reordered$count[1]))
+  #total_num_units = sum(unit_counts_calculated_plus_colors_reordered$count)
+
   p <- ggplot(unitorders_df) +
     geom_bar(aes(x = sample, y = count, fill = seq, group=factor(gp)), stat='identity', width = 1, color = NA) +
     scale_x_discrete(expand = c(0, 0)) +
     scale_y_continuous(expand = c(0, 0)) +
     theme(
-      legend.position = 'bottom',
+      legend.position = 'none',
       axis.text.x = element_blank(),
-      #axis.text.y = element_blank(),
+      axis.text.y = element_blank(),
       axis.title.x = element_blank(),
       axis.title.y = element_blank(),
       axis.ticks.x = element_blank(),
@@ -80,12 +82,15 @@ plot_msa <- function(unitorders_df, ascii_conversion_df, unit_color_msa_df, cons
       plot.background = element_blank(),
       axis.line = element_blank()
     ) +
-    labs(fill = 'Repeat units (count)') +
+    labs(fill = 'Repeat units (frequency)') +
     guides(color = guide_legend(override.aes = list(size = 2)),
            fill = guide_legend(title.position = 'top')) +
     scale_fill_manual(breaks = ranked_units_in_plot[1:length(ranked_units_in_plot)-1],
                       values = ranked_colors_in_plot,
-                      labels = paste0(ranked_units_in_plot[1:length(ranked_units_in_plot)-1], ' (', unit_counts_calculated_plus_colors_reordered$count[1:length(ranked_units_in_plot)-1], ')'),
+                      labels = paste0(ranked_units_in_plot[1:length(ranked_units_in_plot)-1],
+                                      ' (', round(unit_counts_calculated_plus_colors_reordered$count[1:length(ranked_units_in_plot)-1]/sum(unit_counts_calculated_plus_colors_reordered$count),
+                                                  digits = 4),
+                                      ')'),
                       drop = F) +
     coord_flip()
 
@@ -95,8 +100,8 @@ plot_msa <- function(unitorders_df, ascii_conversion_df, unit_color_msa_df, cons
       theme(
         panel.background = element_blank(),
         strip.background = element_blank(),
-        strip.text = element_blank(),
-        axis.text.y = element_text(color = 'black', size = 8,  hjust = 0, vjust = 0.3)
+        strip.text = element_blank()
+        #axis.text.y = element_text(color = 'black', size = 8,  hjust = 0, vjust = 0.3)
       )
   }
 
@@ -130,7 +135,8 @@ plot_msa <- function(unitorders_df, ascii_conversion_df, unit_color_msa_df, cons
   }
 
   if(plotVariableRegion){
-    p <- ggplot(unitorders_df, aes(x = reorder(allele_num, -edit_dist_most_common_allele_units), y = width, fill = factor(seq), group=factor(gp))) +
+    p <- ggplot(unitorders_df, aes(x = allele_num,
+                                   y = width, fill = factor(seq), group=factor(gp))) +
       geom_bar(stat = "identity",
                width = 0.8,
                color = NA) +
@@ -173,24 +179,45 @@ plot_msa <- function(unitorders_df, ascii_conversion_df, unit_color_msa_df, cons
 }
 
 #' @export
-calculate_consensus <- function(x){
+calculate_consensus <- function(x, unit_frequency_df){
+  ordered_unit_frequencies <- sort(prop.table(table(x)), decreasing=TRUE)
   # Here x is a column of the dataframe unitorders_wide_df
-  most_common_unit <- names(sort(prop.table(table(x)), decreasing=TRUE)[1])
-  most_common_unit_frequency <- sort(prop.table(table(x)), decreasing=TRUE)[1]
+  most_common_unit <- names(ordered_unit_frequencies[1])
 
+  # #If there's a tie, print all fractional abundances
+  # if(length(ordered_unit_frequencies) > 1 &
+  #    names(ordered_unit_frequencies[1]) != "-" &
+  #    ordered_unit_frequencies[1] == ordered_unit_frequencies[2]) {
+  #   print(ordered_unit_frequencies)
+  # }
+
+  most_common_unit_frequency <- ordered_unit_frequencies[1]
+
+  #If most common unit is a gap and it doesn't reach 65% frequency, choose most common non-gap unit
   if(most_common_unit == '-' & most_common_unit_frequency <= 0.65){
-    unit <- names(sort(prop.table(table(x)), decreasing=TRUE)[2])
-    frequency <- sort(prop.table(table(x)), decreasing=TRUE)[2]
+    unit <- names(ordered_unit_frequencies[2])
+    frequency <- ordered_unit_frequencies[2]
   } else {
     unit = most_common_unit
     frequency = most_common_unit_frequency
+  }
+
+  #If unit has equal frequency with another unit, choose the more abundant unit
+  if(sum(frequency == ordered_unit_frequencies, na.rm = T) > 1){
+    #Merge unit_frequency_df with ASCII to create cipher
+    unit_frequency_df <- merge(unit_frequency_df, unit_to_ascii_noduplicates, by = "seq")
+    #Sort unit_frequency_df according to frequency, decreasing
+    unit_frequency_df <- unit_frequency_df[order(-unit_frequency_df$frequency),]
+    characters_with_tied_frequencies <- names(ordered_unit_frequencies[frequency == ordered_unit_frequencies])
+    #Save most common unit with higher global frequency
+    unit <- unit_frequency_df[unit_frequency_df$character %in% characters_with_tied_frequencies, "character"][1]
   }
 
   return(c(unit, frequency))
 }
 
 #' @export
-call_consensus_sequence <- function(unitorders_df) {
+call_consensus_sequence <- function(unitorders_df, unit_frequency_df) {
   # Give each position a number in each sequence
   unitorders_df <- as.data.frame(unitorders_df %>% dplyr::group_by(sample) %>% dplyr::mutate(position = 1:dplyr::n()))
   # Mutate the df to have each position as a column
@@ -201,7 +228,7 @@ call_consensus_sequence <- function(unitorders_df) {
   unitorders_wide_df[,1] <- NULL
 
   # For every column, call consensus unit
-  consensus_seq_as_list <- apply(unitorders_wide_df, 2, FUN=function(y) calculate_consensus(y)[1])
+  consensus_seq_as_list <- apply(unitorders_wide_df, 2, FUN=function(y) calculate_consensus(y, unit_frequency_df = unit_frequency_df)[1])
 
   # Reverse the order of the units and collapse this list into a string
   consensus_seq_as_string <- paste(rev(consensus_seq_as_list), collapse='')
@@ -288,94 +315,152 @@ plot_fractional_abundance <- function(unitorders_group, unit_color_msa_df){
 make_repeat_summary_figure <- function(unitorders_group, ..., unit_color_msa_df){
   unitorders_dfs <- list(unitorders_group, ...)
   unit_occurrences_by_position_dfs <- lapply(unitorders_dfs, function(x) calculate_fractional_abundance(x))
-  unit_occurrence_by_position <- bind_rows(unit_occurrences_by_position_dfs, .id = 'source')
+  unit_occurrence_by_position <- dplyr::bind_rows(unit_occurrences_by_position_dfs, .id = 'source')
+  unit_occurrence_by_position$source <- as.numeric(unit_occurrence_by_position$source)
   unit_occurrence_by_position_gapsdropped <- subset(unit_occurrence_by_position, !(seq == '-' & proportion <= 65))
   consensus <- unit_occurrence_by_position_gapsdropped %>% dplyr::group_by(source, position) %>% dplyr::slice_max(proportion) %>% dplyr::ungroup()
-   # Calculate new unit counts
-   unit_counts_calculated <- consensus %>% dplyr::group_by(seq) %>% dplyr::summarize(count = dplyr::n())
+  # Calculate new unit counts
+  unit_counts_calculated <- consensus %>% dplyr::group_by(seq) %>% dplyr::summarize(count = dplyr::n())
 
-   # Add colors to unit counts
-   # The order here is important, default is left join
-   # Need all units in legend for fractional abundance plot
-   # However here I'm counting units in consensus
-   # There's one unit in unit color df that isn't in any consensus
-   # Still want this unit in the legend, give it a count of 0
-   unit_counts_calculated_plus_colors <- plyr::join(unit_color_msa_df, unit_counts_calculated)
-   unit_counts_calculated_plus_colors[is.na(unit_counts_calculated_plus_colors$count), 'count'] <- 0
-   # Reorder samples
-   # TODO Ideally these string values wouldn't be hard coded
-   tmp_df <- unit_counts_calculated_plus_colors[order(unit_counts_calculated_plus_colors[,'count'], decreasing = T),]
-   tmp_df_2 <- rbind(tmp_df[!tmp_df$seq == '30mer with frequency <= 0.0005',],
-                     tmp_df[tmp_df$seq == '30mer with frequency <= 0.0005',])
-   tmp_df_3 <- rbind(tmp_df_2[!tmp_df_2$seq == 'Non-30mer (collective frequency = 0.00041)',],
-                     tmp_df_2[tmp_df_2$seq == 'Non-30mer (collective frequency = 0.00041)',])
-   unit_counts_calculated_plus_colors_reordered <- rbind(tmp_df_3[!tmp_df_3$seq == '-',],
-                                                         tmp_df_3[tmp_df_3$seq == '-',])
-   ranked_colors_in_plot <- unit_counts_calculated_plus_colors_reordered$color
-   ranked_units_in_plot <- unit_counts_calculated_plus_colors_reordered$seq
+  # Add colors to unit counts
+  # The order here is important, default is left join
+  # Need all units in legend for fractional abundance plot
+  # However here I'm counting units in consensus
+  # There's one unit in unit color df that isn't in any consensus
+  # Still want this unit in the legend, give it a count of 0
+  unit_counts_calculated_plus_colors <- plyr::join(unit_color_msa_df, unit_counts_calculated)
+  unit_counts_calculated_plus_colors[is.na(unit_counts_calculated_plus_colors$count), 'count'] <- 0
+  # Reorder samples
+  # TODO Ideally these string values wouldn't be hard coded
+  tmp_df <- unit_counts_calculated_plus_colors[order(unit_counts_calculated_plus_colors[,'count'], decreasing = T),]
+  tmp_df_2 <- rbind(tmp_df[!tmp_df$seq == '30mer with frequency <= 0.0005',],
+                    tmp_df[tmp_df$seq == '30mer with frequency <= 0.0005',])
+  tmp_df_3 <- rbind(tmp_df_2[!tmp_df_2$seq == 'Non-30mer (collective frequency = 0.00041)',],
+                    tmp_df_2[tmp_df_2$seq == 'Non-30mer (collective frequency = 0.00041)',])
+  unit_counts_calculated_plus_colors_reordered <- rbind(tmp_df_3[!tmp_df_3$seq == '-',],
+                                                        tmp_df_3[tmp_df_3$seq == '-',])
+  ranked_colors_in_plot <- unit_counts_calculated_plus_colors_reordered$color
+  ranked_units_in_plot <- unit_counts_calculated_plus_colors_reordered$seq
 
-   # Right before plotting, remove gaps
-   unit_occurrence_by_position <- subset(unit_occurrence_by_position, seq != '-')
+  # Right before plotting, remove gaps
+  unit_occurrence_by_position <- subset(unit_occurrence_by_position, seq != '-')
 
-   # Assign levels of unit sequences to get colors and sample order right
-   unit_occurrence_by_position$seq = factor(unit_occurrence_by_position$seq, levels = ranked_units_in_plot)
+  # Assign levels of unit sequences to get colors and sample order right
+  unit_occurrence_by_position$seq = factor(unit_occurrence_by_position$seq, levels = ranked_units_in_plot)
 
-   rect_boundaries <- unit_occurrence_by_position %>% dplyr::group_by(source) %>% dplyr::summarize(xmax=max(position),
-                                                                                     xmin=1,
-                                                                                     ymin=0,
-                                                                                     ymax=Inf)
+  rect_boundaries <- unit_occurrence_by_position %>% dplyr::group_by(source) %>% dplyr::summarize(xmax=max(position),
+                                                                                                  xmin=1,
+                                                                                                  ymin=0,
+                                                                                                  ymax=Inf)
+
+  # Use facetscales to customize the xaxis on every plot
+  # I need a list of scales
+  #
+  # `4` = scale_y_continuous(limits = c(5, 25), breaks = seq(5, 25, 5)),
+  # `f` = scale_y_continuous(limits = c(0, 40), breaks = seq(0, 40, 10)),
+  # `r` = scale_y_continuous(limits = c(10, 20), breaks = seq(10, 20, 2))
+
+  # How to decide the interval for the breaks?
+  # Any given plot should only have 4 axis ticks
 
 
-   p = ggplot(unit_occurrence_by_position) +
-     geom_rect(data = rect_boundaries, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), fill = 'black') +
-     geom_bar(aes(x = position, y = proportion, fill = seq, group=proportion), stat='identity', width = 1, position = 'stack') +
-     geom_tile(data = consensus, aes(x = position, y = -31, fill = factor(seq)), height = 30) +
-     facet_grid(rows = vars(source), scales = 'free', space = 'free', drop = F) +
-     #scale_x_discrete(drop = F) +
-     scale_x_continuous(expand = c(0, 0), breaks = do.call(seq, c(as.list(range(unit_occurrence_by_position$position)-c(1, 0)), list(by = 200)))) +
-     # tried automating the breaks plyr::round_any(max(unit_occurrence_by_position$position)/5, 10))
-     # TODO automate the choice of distance between breakpoints
-     scale_y_continuous(expand = c(0, 0)) +
-     theme(
-       legend.position = 'bottom',
-       axis.text.y = element_blank(),
-       axis.ticks.y = element_blank(),
-       axis.title.x = element_blank(),
-       axis.title.y = element_blank(),
-       panel.grid.major = element_blank(),
-       panel.grid.minor = element_blank(),
-       panel.background = element_blank(),
-       panel.spacing.y = unit(3, 'lines'),
-       strip.background = element_blank(),
-       strip.text = element_blank(),
-       legend.title = element_text(family = 'Courier', face = 'bold', size = 9),
-       legend.text = element_text(family = 'Courier', size = 9),
-     ) +
-     labs(fill = 'Repeat units (count)') +
-     guides(color = guide_legend(override.aes = list(size = 2)),
-            fill = guide_legend(title.position = 'top')) +
-     scale_fill_manual(breaks = ranked_units_in_plot[1:length(ranked_units_in_plot)],
-                       values = ranked_colors_in_plot,
-                       labels = paste0(ranked_units_in_plot[1:length(ranked_units_in_plot)], ' (', unit_counts_calculated_plus_colors_reordered$count[1:length(ranked_units_in_plot)], ')'),
-                       drop = FALSE)
+
+  # scales_x <- unit_occurrence_by_position %>% group_by(source) %>% summarize(x_min=min(position),
+  #                                                                x_max=floor(max(position)/50)*50,
+  #                                                                breaks = floor((x_max/4)/50)*50) %>%
+  #   stringr::str_glue_data(
+  #     "`{source}` = scale_y_continuous(limits = c({x_min}, {x_max}), ",
+  #     "breaks = seq({x_min}, {x_max}, {breaks}))") %>%
+  #   stringr::str_flatten(", ") %>%
+  #   stringr::str_c("list(", ., ")") %>%
+  #   parse(text = .) %>%
+  #   eval()
+
+
+  seq_groups <- unique(unit_occurrence_by_position$source)
+  max_x_all_groups <- max(unit_occurrence_by_position$position)+1
+  # Calculate relative widths of the groups
+  relative_widths <- unlist(unit_occurrence_by_position %>% dplyr::group_by(source) %>% dplyr::summarize(x_max = max(position)) %>%
+                              dplyr::ungroup() %>%
+                              dplyr::mutate(max_x_max = max(x_max)*1.2,
+                                            rel_width = x_max/max_x_max) %>% dplyr::select(rel_width))
+
+  plotOneGroup <- function(grp){
+    rng <- range(unit_occurrence_by_position[unit_occurrence_by_position$source == grp, "position"])
+    o <- ggplot(unit_occurrence_by_position[unit_occurrence_by_position$source == grp,]) +
+      geom_rect(data = rect_boundaries[rect_boundaries$source == grp,], aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), fill = 'black') +
+      geom_bar(aes(x = position, y = proportion, fill = seq, group=proportion), stat='identity', width = 1, position = 'stack') +
+      geom_tile(data = consensus[consensus$source == grp,], aes(x = position, y = -31, fill = factor(seq)), height = 30) +
+      #facet_grid(rows = vars(source), scales = 'free', space = 'free', drop = F) +
+      #facetscales::facet_grid_sc(rows = vars(source), scales = list(x = scales_x)) +
+      #facet_wrap(~source, scales = 'free') +
+      #scale_x_discrete(drop = F) +
+      scale_x_continuous(expand = c(0, 0), breaks = scales::pretty_breaks()(rng), limits = c(0, max_x_all_groups)) +
+      # tried automating the breaks plyr::round_any(max(unit_occurrence_by_position$position)/5, 10))
+      # TODO automate the choice of distance between breakpoints
+      scale_y_continuous(expand = c(0, 0)) +
+      theme(
+        legend.position = 'none',
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        panel.spacing = unit(3, 'lines'),
+        strip.background = element_blank(),
+        strip.text = element_blank(),
+        legend.title = element_text(family = 'Courier', face = 'bold', size = 9),
+        legend.text = element_text(family = 'Courier', size = 9),
+        #plot.margin = margin(0,0, 0, 0, "pt"),
+        #plot.background = element_rect(fill = "darkblue")
+      ) +
+      labs(fill = 'Repeat units (count)') +
+      guides(color = guide_legend(override.aes = list(size = 2)),
+             fill = guide_legend(title.position = 'top')) +
+      scale_fill_manual(breaks = ranked_units_in_plot[1:length(ranked_units_in_plot)],
+                        values = ranked_colors_in_plot,
+                        labels = paste0(ranked_units_in_plot[1:length(ranked_units_in_plot)], ' (', unit_counts_calculated_plus_colors_reordered$count[1:length(ranked_units_in_plot)], ')'),
+                        drop = FALSE)
+    #o <- o + patchwork::plot_spacer() + patchwork::plot_layout(widths= c(relative_widths[grp], 1-relative_widths[grp]))
+    return(o)
+
+  }
+
+  plotList <- lapply(seq_groups, plotOneGroup)
+  p <- patchwork::wrap_plots(plotList, ncol = 1)
+
+  # ggplot(unit_occurrence_by_position) +
+  #   geom_rect(data = rect_boundaries, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), fill = 'black') +
+  #   geom_bar(aes(x = position, y = proportion, fill = seq, group=proportion), stat='identity', width = 1, position = 'stack') +
+  #   geom_tile(data = consensus, aes(x = position, y = -31, fill = factor(seq)), height = 30) +
+  #   facet_grid(rows = vars(source), scales = 'free', space = 'free', drop = F) +
+  #   #lemon::facet_rep_grid(rows = vars(source), scales = 'free', space = 'free', drop = F,
+  #  #              repeat.tick.labels = TRUE) +
+  #   #facetscales::facet_grid_sc(rows = vars(source), scales = list(x = scales_x)) +
+  #   scale_fill_manual(breaks = ranked_units_in_plot[1:length(ranked_units_in_plot)],
+  #                     values = ranked_colors_in_plot,
+  #                     labels = paste0(ranked_units_in_plot[1:length(ranked_units_in_plot)], ' (', unit_counts_calculated_plus_colors_reordered$count[1:length(ranked_units_in_plot)], ')'),
+  #                     drop = FALSE)
 
   return(p)
 }
 
 #' @export
-call_consensus_frequency <- function(unitorders_df) {
+call_consensus_frequency <- function(unitorders_df, unit_frequency_df) {
   # TODO call_consensus_sequence also uses this pivot and rename function
   # Give each position a number in each sequence
   unitorders_df <- as.data.frame(unitorders_df %>% dplyr::group_by(sample) %>% dplyr::mutate(position = rev(1:dplyr::n())))
   # Mutate the df to have each position as a column
   unitorders_wide_df <- as.data.frame(tidyr::pivot_wider(unitorders_df[, c('sample', 'position', 'character')],
-                                                  names_from = position, values_from = character))
+                                                         names_from = position, values_from = character))
   # Set the row names as the sample column
   row.names(unitorders_wide_df) <- unitorders_wide_df[,1]
   unitorders_wide_df[,1] <- NULL
 
   # For every column, get the most common unit's frequency
-  consensus_freq_as_list <- apply(unitorders_wide_df, 2, FUN=function(y) calculate_consensus(y)[2])
+  consensus_freq_as_list <- apply(unitorders_wide_df, 2, FUN=function(y) calculate_consensus(y, unit_frequency_df = unit_frequency_df)[2])
 
   return(consensus_freq_as_list)
 }
@@ -386,7 +471,7 @@ calculate_variability_score <- function(unitorders_df){
   unitorders_with_position_df <- as.data.frame(unitorders_df %>% dplyr::group_by(sample) %>% dplyr::mutate(position = 1:dplyr::n()))
   # Mutate the df to have each position as a row
   unitorders_with_conservation_score_df <- as.data.frame(tidyr::pivot_wider(unitorders_with_position_df[, c('sample', 'position', 'character')],
-                                                                     names_from = position, values_from = character))
+                                                                            names_from = position, values_from = character))
   row.names(unitorders_with_conservation_score_df) <- unitorders_with_conservation_score_df[,1]
   unitorders_with_conservation_score_df[,1] <- NULL
   # Estimate Shannon's entropy per position in MSA
@@ -439,6 +524,19 @@ summarize_variable_region <- function(vr_unitorders_df, positions_list){
                      most_common_group=names(which.max(table(destination))),
                      samples=paste(sample,collapse=','))
 
+  # Alleles by group
+  alleles_by_group_df <- vr_unitorders_df %>%
+    dplyr::group_by(sample) %>%
+    dplyr::summarize(allele_ascii_rev=paste(character,collapse=''),
+                     allele_seq_rev=paste(seq_rev,collapse=''),
+                     allele = strReverse(allele_ascii_rev),
+                     allele_num = factor(allele),
+                     allele_seq = strReverse(allele_seq_rev),
+                     destination = dplyr::first(destination)) %>%
+    ungroup() %>%
+    dplyr::group_by(destination, allele_num, allele, allele_seq) %>%
+    dplyr::summarize(num_sequences=n_distinct(sample))
+
   # Define most common alleles
   n <- length(alleles_at_variable_region_df$count)
   num_alleles_tied_highest_count <- dim(alleles_at_variable_region_df[alleles_at_variable_region_df$count == sort(alleles_at_variable_region_df$count,
@@ -464,7 +562,7 @@ summarize_variable_region <- function(vr_unitorders_df, positions_list){
     )
   } else if(num_alleles_tied_highest_count == 1){
     most_common_allele_seq <- alleles_at_variable_region_df[alleles_at_variable_region_df$count
-                                                                   == sort(alleles_at_variable_region_df$count, partial=n-1)[n], 'allele_seq']$allele_seq
+                                                            == sort(alleles_at_variable_region_df$count, partial=n-1)[n], 'allele_seq']$allele_seq
     second_most_common_allele_seq <- alleles_at_variable_region_df[alleles_at_variable_region_df$count
                                                                    == sort(alleles_at_variable_region_df$count, partial=n-1)[n-1], 'allele_seq']$allele_seq
     most_common_allele <- alleles_at_variable_region_df[alleles_at_variable_region_df$count == sort(alleles_at_variable_region_df$count,
@@ -565,7 +663,7 @@ summarize_variable_region <- function(vr_unitorders_df, positions_list){
   alleles_at_variable_region_edit_dist_df$edit_dist_second_most_common_allele_units <- lapply(alleles_at_variable_region_edit_dist_df$allele, function(x) DescTools::StrDist(x, second_most_common_allele, method = 'hamming'))
   alleles_at_variable_region_edit_dist_df$edit_dist_second_most_common_allele_units <- as.numeric(alleles_at_variable_region_edit_dist_df$edit_dist_second_most_common_allele_units)
 
-  return(alleles_at_variable_region_edit_dist_df)
+  return(list(alleles_at_variable_region_edit_dist_df, alleles_by_group_df))
 }
 
 #' @export
@@ -598,6 +696,9 @@ summarize_variable_regions <- function(unitorders_df){
 
 #' @export
 plot_alleles_at_variable_regions <- function(allele_at_variable_regions_df, ascii_conversion_df, unit_color_msa_df){
+  allele_at_variable_regions_df <- allele_at_variable_regions_df[order(allele_at_variable_regions_df$edit_dist_most_common_allele_units),]
+  allele_at_variable_regions_df$allele_num <- forcats::fct_reorder(allele_at_variable_regions_df$allele_num, allele_at_variable_regions_df$edit_dist_most_common_allele_units)
+  print(levels(allele_at_variable_regions_df$allele_num))
   # Columns for plotting format: character, seq, gp, allele
   # allele_num is a factored version of allele
   # Drop samples column
@@ -616,6 +717,10 @@ plot_alleles_at_variable_regions <- function(allele_at_variable_regions_df, asci
   unitorders_variable_region_df$width <- 2
   unitorders_variable_region_df$gp <- seq(nrow(unitorders_variable_region_df))
   unitorders_variable_region_df[is.na(unitorders_variable_region_df$seq), 'seq'] <- '-'
+
+  unitorders_variable_region_df$allele_num <- factor(unitorders_variable_region_df$allele_num,
+                                                     levels = rev(levels(allele_at_variable_regions_df$allele_num)))
+  print(levels(unitorders_variable_region_df$allele_num))
 
   vr_plot <- plot_msa(unitorders_variable_region_df, ascii_conversion_df, unit_color_msa_df, plotVariableRegion = T)
 
