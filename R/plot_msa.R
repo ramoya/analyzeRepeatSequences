@@ -211,9 +211,9 @@ calculate_consensus <- function(x, unit_frequency_df){
   #If unit has equal frequency with another unit, choose the more abundant unit
   if(sum(frequency == ordered_unit_frequencies_nogap, na.rm = T) > 1){
     #Merge unit_frequency_df with ASCII to create cipher
-    unit_frequency_df <- merge(unit_frequency_df, unit_to_ascii_noduplicates, by = "seq")
+    unit_frequency_df <- merge(unit_frequency_df, unit_to_ascii_noduplicates, by.x = "seq", by.y = "seq")
     #Sort unit_frequency_df according to frequency, decreasing
-    unit_frequency_df <- unit_frequency_df[order(-unit_frequency_df$frequency),]
+    unit_frequency_df <- unit_frequency_df[order(-unit_frequency_df$Frequency),]
     characters_with_tied_frequencies <- names(ordered_unit_frequencies_nogap[frequency == ordered_unit_frequencies_nogap])
 
     #To detect positions with ties
@@ -249,7 +249,7 @@ call_consensus_sequence <- function(unitorders_df, unit_frequency_df) {
   # Remove gaps from this sequence, gaps that are left represent insertion with a frequency of at most 15%
   #consensus_seq_as_string <- gsub('-', '—', consensus_seq_as_string)
 
-  return(consensus_seq_as_string)
+  return(list(consensus_seq_as_string, unitorders_wide_df))
 }
 
 #' @export
@@ -697,6 +697,7 @@ summarize_variable_regions <- function(unitorders_df, threshold){
   threshold_variability <- threshold
   unitorders_df$seq[unitorders_df$seq == ""] <-  strrep('-', 30)
   variability_score_df <- calculate_variability_score(unitorders_df)
+  print(variability_score_df)
   # Use a copy of the x position column to mark where variability score is larger than threshold, mark with 1
   variability_score_df$detect_runs <- variability_score_df$x
   variability_score_df[variability_score_df$y > threshold_variability, 'detect_runs'] <- 1
@@ -704,11 +705,20 @@ summarize_variable_regions <- function(unitorders_df, threshold){
   runs <- rle(variability_score_df$detect_runs)
   # Summarize lengths of runs in df
   end = cumsum(runs$lengths)
+  print("END: ")
+  print(end)
   start = c(1, dplyr::lag(end)[-1] + 1)
+  print("START: ")
+  print(start)
   run_lengths_df <- data.frame(start, end)
+  print("RUN LENGTHS: ")
+  print(run_lengths_df)
   variable_regions_boundaries_df <- subset(run_lengths_df, end-start >= 2)
+  print("Variable regions boundaries df")
+  print(variable_regions_boundaries_df)
   variable_region_positions <- apply(variable_regions_boundaries_df, 1, function(x) seq(x['start'], x['end'])) #the names of this nested list are the row numbers where the range is defined
   # Give each position in the sequence a number
+  print(variable_region_positions)
   unitorders_with_position_df <- as.data.frame(unitorders_df %>% dplyr::group_by(sample) %>% dplyr::mutate(position = rev(1:dplyr::n())))
   variable_region_unitorders_df <- lapply(seq(variable_region_positions), function(x) unitorders_with_position_df[unitorders_with_position_df$position %in% variable_region_positions[[x]],])
   # This is a nested list of dfs and there are several modifications I want to make to every df in the list
