@@ -233,7 +233,7 @@ calculate_consensus <- function(x, unit_frequency_df){
 #' @export
 call_consensus_sequence <- function(unitorders_df, unit_frequency_df) {
   # Give each position a number in each sequence
-  unitorders_df <- as.data.frame(unitorders_df %>% dplyr::group_by(sample) %>% dplyr::mutate(position = 1:dplyr::n()))
+  unitorders_df <- as.data.frame(unitorders_df %>% dplyr::group_by(sample) %>% dplyr::mutate(position = rev(1:dplyr::n())))
   # Mutate the df to have each position as a column
   unitorders_wide_df <- as.data.frame(tidyr::pivot_wider(unitorders_df[, c('sample', 'position', 'character')],
                                                          names_from = position, values_from = character))
@@ -326,15 +326,78 @@ plot_fractional_abundance <- function(unitorders_group, unit_color_msa_df){
 #doesn't integrate other functions in the module
 
 #' @export
-make_repeat_summary_figure <- function(unitorders_group, ..., unit_color_msa_df){
+make_repeat_summary_figure <- function(unitorders_group, ..., unit_color_msa_df, ascii_conversion_df, unit_frequency_df, manuscript_directory){
   unitorders_dfs <- list(unitorders_group, ...)
-  unit_occurrences_by_position_dfs <- lapply(unitorders_dfs, function(x) calculate_fractional_abundance(x))
-  unit_occurrence_by_position <- dplyr::bind_rows(unit_occurrences_by_position_dfs, .id = 'source')
+  #Call consensus
+  #Calculate fractional abundance and put in df unit_occurrences_by_position_dfs
+  #unit_occurrences_by_position_dfs is a list of dataframes, each with the columns position, seq, n, proportion
+  consensuses <- lapply(unitorders_dfs, function(x) call_consensus_sequence(x, unit_frequency_df))
+  consensus_dfs <- lapply(seq(1:length(consensuses)), FUN = function(x) data.frame(character = unlist(stringr::str_split(consensuses[[x]][[1]], pattern = "")),
+                                                                                   position = seq(1, length(unlist(stringr::str_split(consensuses[[x]][[1]], pattern = "")))),
+                                                                                   source = x) %>%
+                            magrittr::set_colnames(c("character", "position", "source"))) #use string of consensus sequence to get source (Type), position, and character
+
+  #get fractional abundance at each position
+  #VERSION WITH PROP.TABLE
+  make_fractional_abundance_df <- function(x){
+    tmp <- do.call("rbind", as.list(unlist(
+      apply(
+        call_consensus_sequence(x, unit_frequency_df)[[2]],
+        2,
+        FUN = function(y)
+          sort(prop.table(table(y)), decreasing = TRUE)
+      ),
+      recursive = F
+    ))) %>%
+      as.data.frame() %>%
+      tibble::rownames_to_column("to_split") %>% tidyr::separate_wider_delim(
+        cols = "to_split",
+        delim = ".",
+        names = c("position", "character")
+      ) %>%
+      magrittr::set_colnames(c("position", "character", "proportion"))
+
+    #convert character to seq
+    tmp <- merge(tmp, ascii_conversion_df, by = "character", all.x = T)
+    tmp$position <- as.numeric(tmp$position)
+    tmp$n <- tmp$proportion*(rep(dim(call_consensus_sequence(x, unit_frequency_df)[[2]])[1], length(tmp$proportion)))
+    tmp <- tmp %>% dplyr::ungroup() %>% dplyr::arrange(position, -proportion)
+    return(tmp)
+  }
+
+  fractional_abundance_dfs <- lapply(unitorders_dfs, make_fractional_abundance_df)
+
+  #combine consensus dfs
+  consensus <- dplyr::bind_rows(consensus_dfs, .id = 'source')
+  consensus <- merge(consensus, ascii_conversion_df, by = "character", all.x = T)
+  consensus[is.na(consensus$seq), "seq"] <- "-"
+
+  #combine fractional_abundance dfs
+  unit_occurrence_by_position <- dplyr::bind_rows(fractional_abundance_dfs, .id = 'source')
   unit_occurrence_by_position$source <- as.numeric(unit_occurrence_by_position$source)
-  unit_occurrence_by_position_gapsdropped <- subset(unit_occurrence_by_position, !(seq == '-' & proportion <= 65))
-  consensus <- unit_occurrence_by_position_gapsdropped %>% dplyr::group_by(source, position) %>% dplyr::slice_max(proportion) %>% dplyr::ungroup()
+  unit_occurrence_by_position[is.na(unit_occurrence_by_position$seq), "seq"] <- "-"
+
+  # #previous
+  # unit_occurrences_by_position_dfs <- lapply(unitorders_dfs, function(x) calculate_fractional_abundance(x))
+  # #VERSION WITH n()
+  # lapply(unitorders_dfs, function(x)
+  #   y <- call_consensus_sequence(x, unit_counts_table_s5)[[2]] %>%
+  #   tibble::rownames_to_column("sample") %>%
+  #   tidyr::pivot_longer(cols = -c("sample"), names_to = "position", values_to = "character") %>%
+  #   dplyr::group_by(position, character) %>% dplyr::summarize(n = dplyr::n()) %>%
+  #   dplyr::mutate(proportion = (n / sum(n))*100) %>% dplyr::arrange(character, proportion, .by_group = T) %>%
+  #   dplyr::select(position, character, proportion)
+  #   # y$position <- as.numeric(y$position)
+  #   # y <- y %>% dplyr::arrange(position, proportion)
+  #   )
+  # unit_occurrence_by_position <- dplyr::bind_rows(unit_occurrences_by_position_dfs, .id = 'source')
+  # unit_occurrence_by_position$source <- as.numeric(unit_occurrence_by_position$source)
+  # unit_occurrence_by_position_gapsdropped <- subset(unit_occurrence_by_position, !(seq == '-' & proportion <= 65))
+  # consensus <- unit_occurrence_by_position_gapsdropped %>% dplyr::group_by(source, position) %>% dplyr::slice_max(proportion) %>% dplyr::ungroup()
+
   # Calculate new unit counts
-  unit_counts_calculated <- consensus %>% dplyr::group_by(seq) %>% dplyr::summarize(count = dplyr::n())
+  unit_counts_calculated <- consensus %>%
+    dplyr::group_by(seq) %>% dplyr::summarize(count = dplyr::n())
 
   # Add colors to unit counts
   # The order here is important, default is left join
@@ -368,93 +431,100 @@ make_repeat_summary_figure <- function(unitorders_group, ..., unit_color_msa_df)
                                                                                                   ymin=0,
                                                                                                   ymax=Inf)
 
-  # Use facetscales to customize the xaxis on every plot
-  # I need a list of scales
-  #
-  # `4` = scale_y_continuous(limits = c(5, 25), breaks = seq(5, 25, 5)),
-  # `f` = scale_y_continuous(limits = c(0, 40), breaks = seq(0, 40, 10)),
-  # `r` = scale_y_continuous(limits = c(10, 20), breaks = seq(10, 20, 2))
+# Use facetscales to customize the xaxis on every plot
+# I need a list of scales
+#
+# `4` = scale_y_continuous(limits = c(5, 25), breaks = seq(5, 25, 5)),
+# `f` = scale_y_continuous(limits = c(0, 40), breaks = seq(0, 40, 10)),
+# `r` = scale_y_continuous(limits = c(10, 20), breaks = seq(10, 20, 2))
+#
+# # How to decide the interval for the breaks?
+# # Any given plot should only have 4 axis ticks
+#
+#
+#
+# scales_x <- unit_occurrence_by_position %>% group_by(source) %>% summarize(x_min=min(position),
+#                                                                x_max=floor(max(position)/50)*50,
+#                                                                breaks = floor((x_max/4)/50)*50) %>%
+#   stringr::str_glue_data(
+#     "`{source}` = scale_y_continuous(limits = c({x_min}, {x_max}), ",
+#     "breaks = seq({x_min}, {x_max}, {breaks}))") %>%
+#   stringr::str_flatten(", ") %>%
+#   stringr::str_c("list(", ., ")") %>%
+#   parse(text = .) %>%
+#   eval()
 
-  # How to decide the interval for the breaks?
-  # Any given plot should only have 4 axis ticks
 
+seq_groups <- unique(unit_occurrence_by_position$source)
+max_x_all_groups <- max(unit_occurrence_by_position$position)+1
+# Calculate relative widths of the groups
+relative_widths <- unlist(unit_occurrence_by_position %>% dplyr::group_by(source) %>% dplyr::summarize(x_max = max(position)) %>%
+                            dplyr::ungroup() %>%
+                            dplyr::mutate(max_x_max = max(x_max)*1.2,
+                                          rel_width = x_max/max_x_max) %>% dplyr::select(rel_width))
 
+plotOneGroup <- function(grp){
+  rng <- range(unit_occurrence_by_position[unit_occurrence_by_position$source == grp, "position"])
+  o <- ggplot(unit_occurrence_by_position[unit_occurrence_by_position$source == grp,]) +
+    geom_rect(data = rect_boundaries[rect_boundaries$source == grp,], aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), fill = 'black') +
+    geom_bar(aes(x = position, y = proportion, fill = seq, group=proportion), stat='identity', width = 1, position = 'stack') +
+    geom_tile(data = consensus[consensus$source == grp,], aes(x = position, y = -1, fill = factor(seq)), height = 1) +
+    #facet_grid(rows = vars(source), scales = 'free', space = 'free', drop = F) +
+    #facetscales::facet_grid_sc(rows = vars(source), scales = list(x = scales_x)) +
+    #facet_wrap(~source, scales = 'free') +
+    #scale_x_discrete(drop = F) +
+    scale_x_continuous(expand = c(0, 0), breaks = scales::pretty_breaks()(rng), limits = c(0, max_x_all_groups)) +
+    # tried automating the breaks plyr::round_any(max(unit_occurrence_by_position$position)/5, 10))
+    # TODO automate the choice of distance between breakpoints
+    scale_y_continuous(expand = c(0, 0)) +
+    theme(
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.background = element_blank(),
+      panel.spacing = unit(3, 'lines'),
+      strip.background = element_blank(),
+      strip.text = element_blank(),
+      legend.title = element_text(family = 'Courier', face = 'bold', size = 9),
+      legend.text = element_text(family = 'Courier', size = 9),
+      legend.position = 'none'
+    ) +
+    labs(fill = 'Repeat units (count)') +
+    scale_fill_manual(breaks = ranked_units_in_plot[1:length(ranked_units_in_plot)],
+                      values = ranked_colors_in_plot,
+                      labels = paste0(ranked_units_in_plot[1:length(ranked_units_in_plot)], ' (', unit_counts_calculated_plus_colors_reordered$count[1:length(ranked_units_in_plot)], ')'),
+                      drop = FALSE)
+  #o <- o + patchwork::plot_spacer() + patchwork::plot_layout(widths= c(relative_widths[grp], 1-relative_widths[grp]))
 
-  # scales_x <- unit_occurrence_by_position %>% group_by(source) %>% summarize(x_min=min(position),
-  #                                                                x_max=floor(max(position)/50)*50,
-  #                                                                breaks = floor((x_max/4)/50)*50) %>%
-  #   stringr::str_glue_data(
-  #     "`{source}` = scale_y_continuous(limits = c({x_min}, {x_max}), ",
-  #     "breaks = seq({x_min}, {x_max}, {breaks}))") %>%
-  #   stringr::str_flatten(", ") %>%
-  #   stringr::str_c("list(", ., ")") %>%
-  #   parse(text = .) %>%
-  #   eval()
+  #After plotting, save length of each consensus as in-place table
+  consensus %>% subset(seq != "-") %>% dplyr::select(source, seq) %>% dplyr::group_by(source) %>%
+    dplyr::count() %>%
+    magrittr::set_colnames(c("Type", "Length (repeat units)")) %>%
+    write.table(file = paste0(manuscript_directory, "source -- Raquel/Repeat_type_summary_consensus_lengths_repeat_units.tsv"),
+                quote = F, sep = "\t", row.names = F)
+  return(o)
 
+}
 
-  seq_groups <- unique(unit_occurrence_by_position$source)
-  max_x_all_groups <- max(unit_occurrence_by_position$position)+1
-  # Calculate relative widths of the groups
-  relative_widths <- unlist(unit_occurrence_by_position %>% dplyr::group_by(source) %>% dplyr::summarize(x_max = max(position)) %>%
-                              dplyr::ungroup() %>%
-                              dplyr::mutate(max_x_max = max(x_max)*1.2,
-                                            rel_width = x_max/max_x_max) %>% dplyr::select(rel_width))
+plotList <- lapply(seq_groups, plotOneGroup)
+p <- patchwork::wrap_plots(plotList, ncol = 1)
+# ggplot(unit_occurrence_by_position) +
+#   geom_rect(data = rect_boundaries, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), fill = 'black') +
+#   geom_bar(aes(x = position, y = proportion, fill = seq, group=proportion), stat='identity', width = 1, position = 'stack') +
+#   geom_tile(data = consensus, aes(x = position, y = -31, fill = factor(seq)), height = 30) +
+#   facet_grid(rows = vars(source), scales = 'free', space = 'free', drop = F) +
+#   #lemon::facet_rep_grid(rows = vars(source), scales = 'free', space = 'free', drop = F,
+#  #              repeat.tick.labels = TRUE) +
+#   #facetscales::facet_grid_sc(rows = vars(source), scales = list(x = scales_x)) +
+#   scale_fill_manual(breaks = ranked_units_in_plot[1:length(ranked_units_in_plot)],
+#                     values = ranked_colors_in_plot,
+#                     labels = paste0(ranked_units_in_plot[1:length(ranked_units_in_plot)], ' (', unit_counts_calculated_plus_colors_reordered$count[1:length(ranked_units_in_plot)], ')'),
+#                     drop = FALSE)
 
-  plotOneGroup <- function(grp){
-    rng <- range(unit_occurrence_by_position[unit_occurrence_by_position$source == grp, "position"])
-    o <- ggplot(unit_occurrence_by_position[unit_occurrence_by_position$source == grp,]) +
-      geom_rect(data = rect_boundaries[rect_boundaries$source == grp,], aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), fill = 'black') +
-      geom_bar(aes(x = position, y = proportion, fill = seq, group=proportion), stat='identity', width = 1, position = 'stack') +
-      geom_tile(data = consensus[consensus$source == grp,], aes(x = position, y = -31, fill = factor(seq)), height = 30) +
-      #facet_grid(rows = vars(source), scales = 'free', space = 'free', drop = F) +
-      #facetscales::facet_grid_sc(rows = vars(source), scales = list(x = scales_x)) +
-      #facet_wrap(~source, scales = 'free') +
-      #scale_x_discrete(drop = F) +
-      scale_x_continuous(expand = c(0, 0), breaks = scales::pretty_breaks()(rng), limits = c(0, max_x_all_groups)) +
-      # tried automating the breaks plyr::round_any(max(unit_occurrence_by_position$position)/5, 10))
-      # TODO automate the choice of distance between breakpoints
-      scale_y_continuous(expand = c(0, 0)) +
-      theme(
-        axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.title.x = element_blank(),
-        axis.title.y = element_blank(),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        panel.spacing = unit(3, 'lines'),
-        strip.background = element_blank(),
-        strip.text = element_blank(),
-        legend.title = element_text(family = 'Courier', face = 'bold', size = 9),
-        legend.text = element_text(family = 'Courier', size = 9),
-        legend.position = 'none'
-      ) +
-      labs(fill = 'Repeat units (count)') +
-      scale_fill_manual(breaks = ranked_units_in_plot[1:length(ranked_units_in_plot)],
-                        values = ranked_colors_in_plot,
-                        labels = paste0(ranked_units_in_plot[1:length(ranked_units_in_plot)], ' (', unit_counts_calculated_plus_colors_reordered$count[1:length(ranked_units_in_plot)], ')'),
-                        drop = FALSE)
-    #o <- o + patchwork::plot_spacer() + patchwork::plot_layout(widths= c(relative_widths[grp], 1-relative_widths[grp]))
-    return(o)
-
-  }
-
-  plotList <- lapply(seq_groups, plotOneGroup)
-  p <- patchwork::wrap_plots(plotList, ncol = 1)
-  # ggplot(unit_occurrence_by_position) +
-  #   geom_rect(data = rect_boundaries, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), fill = 'black') +
-  #   geom_bar(aes(x = position, y = proportion, fill = seq, group=proportion), stat='identity', width = 1, position = 'stack') +
-  #   geom_tile(data = consensus, aes(x = position, y = -31, fill = factor(seq)), height = 30) +
-  #   facet_grid(rows = vars(source), scales = 'free', space = 'free', drop = F) +
-  #   #lemon::facet_rep_grid(rows = vars(source), scales = 'free', space = 'free', drop = F,
-  #  #              repeat.tick.labels = TRUE) +
-  #   #facetscales::facet_grid_sc(rows = vars(source), scales = list(x = scales_x)) +
-  #   scale_fill_manual(breaks = ranked_units_in_plot[1:length(ranked_units_in_plot)],
-  #                     values = ranked_colors_in_plot,
-  #                     labels = paste0(ranked_units_in_plot[1:length(ranked_units_in_plot)], ' (', unit_counts_calculated_plus_colors_reordered$count[1:length(ranked_units_in_plot)], ')'),
-  #                     drop = FALSE)
-
-  return(p)
+return(p)
 }
 
 #' @export
