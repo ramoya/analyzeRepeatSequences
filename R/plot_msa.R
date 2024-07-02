@@ -2,10 +2,6 @@
 # The importance of unit_counts_df is that it considers all units. It is a freeze of unit counts prior to masking
 # dfs beginning with unitorders are in a format for making plots & they have infrequent typical and atypical length units masked
 
-# Figure out what to do with this data
-# should save these outputs to /data as .rda files
-# How to indicate which genes it's looking at
-
 #' @importFrom magrittr %>%
 #' @name %>%
 #' @rdname pipe
@@ -17,11 +13,12 @@ plot_msa <- function(unitorders_df, ascii_conversion_df, unit_color_msa_df, cons
                      plotSubgroups = F,
                      plotVariabilityScore = F,
                      highlightUnits = F,
-                     plotVariableRegion = F){
+                     plotVariableRegion = F,
+                     plotMinMax = F,
+                     manuscript_directory){
   # Plot a multiple sequence alignment
   unitorders_df$seq[unitorders_df$seq == ""] <-  '-'
 
-  # TODO ideally these strings wouldn't be hard coded either
   if(highlightUnits){
     unitorders_df[unitorders_df$seq != '30mer with frequency <= 0.0005' &
                     unitorders_df$seq != 'Non-30mer (collective frequency = 0.00041)' &
@@ -44,7 +41,6 @@ plot_msa <- function(unitorders_df, ascii_conversion_df, unit_color_msa_df, cons
   }
 
   # Reorder samples
-  # TODO Ideally these string values wouldn't be hard coded
   tmp_df <- unit_counts_calculated_plus_colors[order(unit_counts_calculated_plus_colors[,'count'], decreasing = T),]
   tmp_df_2 <- rbind(tmp_df[!tmp_df$seq == '30mer with frequency <= 0.0005',],
                     tmp_df[tmp_df$seq == '30mer with frequency <= 0.0005',])
@@ -60,8 +56,6 @@ plot_msa <- function(unitorders_df, ascii_conversion_df, unit_color_msa_df, cons
     viridis::scale_color_viridis(direction=-1, trans = "log",
                                  breaks = (c(0, 0.001, 0.01, 0.1, 0.3))) + #log-scale transformation of frequency = 0 throws warning
     theme_minimal()
-  # print(colorbar_plot)
-  # print(ggpubr::as_ggplot(ggpubr::get_legend(colorbar_plot)))
 
   ranked_colors_in_plot <- unit_counts_calculated_plus_colors_reordered$color
   ranked_units_in_plot <- unit_counts_calculated_plus_colors_reordered$seq
@@ -70,21 +64,19 @@ plot_msa <- function(unitorders_df, ascii_conversion_df, unit_color_msa_df, cons
   unitorders_df$seq = factor(unitorders_df$seq, levels = ranked_units_in_plot)
 
   p <- ggplot(unitorders_df) +
-    geom_bar(aes(x = sample, y = count, fill = seq, group=factor(gp)), stat='identity', width = 1, color = NA) +
+    geom_bar(aes(x = sample, y = count, fill = seq, group=factor(gp)),
+                 stat='identity', width = 1, color = NA) +
     scale_x_discrete(expand = c(0, 0)) +
     scale_y_continuous(expand = c(0, 0)) +
     theme(
-      legend.position = 'none',
-      #axis.text.x = element_blank(),
+      legend.position = 'bottom',
       axis.text.y = element_blank(),
       axis.title.x = element_blank(),
       axis.title.y = element_blank(),
-      #axis.ticks.x = element_blank(),
       axis.ticks.y = element_blank(),
       legend.title = element_text(family = 'Courier', face = 'bold', size = 8),
       legend.text = element_text(family = 'Courier', size = 8),
       panel.background = element_rect(fill = 'black'),
-      #panel.border = element_blank(),
       panel.grid = element_blank(),
       plot.background = element_blank(),
       axis.line = element_blank()
@@ -98,9 +90,15 @@ plot_msa <- function(unitorders_df, ascii_conversion_df, unit_color_msa_df, cons
                                       ' (', round(unit_counts_calculated_plus_colors_reordered$count[1:length(ranked_units_in_plot)-1]/sum(unit_counts_calculated_plus_colors_reordered$count[1:length(ranked_units_in_plot)-1]),
                                                   digits = 4),
                                       ')'),
-                      drop = F,
                       na.value = "black") +
     coord_flip()
+
+  if(plotMinMax){
+    p = p +
+      scale_y_continuous(breaks=c(0,
+                                  (unitorders_df %>% dplyr::group_by(sample) %>% dplyr::summarize(max = sum(count)) %>%
+                                        dplyr::pull(max))[1], expand=c(0,0)))
+  }
 
 
   if(plotSubgroups){
@@ -109,8 +107,26 @@ plot_msa <- function(unitorders_df, ascii_conversion_df, unit_color_msa_df, cons
         panel.background = element_blank(),
         strip.background = element_blank(),
         strip.text = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
         #axis.text.y = element_text(color = 'black', size = 8,  hjust = 0, vjust = 0.3)
       )
+
+    #Save in-place table of alignment lengths only if alignment is full-length
+    alignment_lengths_df <- unitorders_df %>% dplyr::select(group, sample) %>%
+      dplyr::group_by(group, sample) %>% dplyr::count() %>%
+      dplyr::ungroup() %>%
+      dplyr::select(group, n) %>% dplyr::distinct()
+
+    if(all(alignment_lengths_df$n > 100)){
+      print(alignment_lengths_df %>%
+        magrittr::set_colnames(c("Type", "Alignment length including gaps (repeat units)"))) %>%
+        write.table(file = paste0(manuscript_directory, "source -- Raquel/msa_", paste0(unique(unitorders_df$group), collapse = ""),
+        "_alignment_lengths_repeat_units.tsv"),
+                    quote = F, sep = "\t", row.names = F)
+
+    }
+
   }
 
   if(plotVariabilityScore){
@@ -322,8 +338,7 @@ plot_fractional_abundance <- function(unitorders_group, unit_color_msa_df){
     ylab('Percentage of repeat units')
 
   return(fractional_abundance_plot)
-} # only useful for plotting one fractional abundance,
-#doesn't integrate other functions in the module
+} # useful for plotting fractional abundance of one consensus sequence
 
 #' @export
 make_repeat_summary_figure <- function(unitorders_group, ..., unit_color_msa_df, ascii_conversion_df, unit_frequency_df, manuscript_directory){
@@ -505,6 +520,15 @@ plotOneGroup <- function(grp){
     magrittr::set_colnames(c("Type", "Length (repeat units)")) %>%
     write.table(file = paste0(manuscript_directory, "source -- Raquel/Repeat_type_summary_consensus_lengths_repeat_units.tsv"),
                 quote = F, sep = "\t", row.names = F)
+
+  #Save length of alignments by Type as in-place table
+  unit_occurrence_by_position %>% dplyr::select(source, position) %>% dplyr::distinct() %>%
+    dplyr::group_by(source) %>%
+    dplyr::count() %>%
+    magrittr::set_colnames(c("Type", "Alignment length including gaps (repeat units)")) %>%
+    write.table(file = paste0(manuscript_directory, "source -- Raquel/Repeat_type_summary_alignment_lengths_repeat_units.tsv"),
+                quote = F, sep = "\t", row.names = F)
+
   return(o)
 
 }
