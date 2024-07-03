@@ -1,7 +1,7 @@
 # analyzeRepeatSequences
-Analyze CACNA1C repeat sequences. This package provides involves:
+Analyze CACNA1C repeat sequences. This package involves:
   - Visualizing a multiple sequence alignment of repetitive sequences.
-  - Summarizing multiple sequence alignment into stacked bar plot of repeat unit frequencies.
+  - Summarizing a multiple sequence alignment into stacked bar plot of repeat unit frequencies.
   - Calculating a consensus sequence from related sequences.
   - Determining variable segments of repetitive sequences. Each color corresponds to a distinct repeat unit sequence.
 
@@ -21,6 +21,10 @@ Input file formats:
                   This gives every repeat unit in a sequence its own position, 
                   rather than clustering identical units together (integer)
               group: used with plotSubgroups = T to cluster sequences in the plot
+              
+To install:
+
+        devtools::install_github("ramoya/analyzeRepeatSequences")
               
               
 Preprint: https://www.medrxiv.org/content/10.1101/2024.03.05.24303780v2
