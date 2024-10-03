@@ -2,11 +2,6 @@
 # The importance of unit_counts_df is that it considers all units. It is a freeze of unit counts prior to masking
 # dfs beginning with unitorders are in a format for making plots & they have infrequent typical and atypical length units masked
 
-#' @importFrom magrittr %>%
-#' @name %>%
-#' @rdname pipe
-#' @export
-
 # Functions
 #' @export
 plot_msa <- function(unitorders_df, ascii_conversion_df, unit_color_msa_df, consensus_df = NULL,
@@ -14,8 +9,7 @@ plot_msa <- function(unitorders_df, ascii_conversion_df, unit_color_msa_df, cons
                      plotVariabilityScore = F,
                      highlightUnits = F,
                      plotVariableRegion = F,
-                     plotMinMax = F,
-                     manuscript_directory) {
+                     plotMinMax = F) {
   # Plot a multiple sequence alignment
   unitorders_df$seq[unitorders_df$seq == ""] <- "-"
 
@@ -143,17 +137,6 @@ plot_msa <- function(unitorders_df, ascii_conversion_df, unit_color_msa_df, cons
       dplyr::select(group, n) %>%
       dplyr::distinct()
 
-    if (all(alignment_lengths_df$n > 100)) {
-      print(alignment_lengths_df %>%
-        magrittr::set_colnames(c("Type", "Alignment length including gaps (repeat units)"))) %>%
-        write.table(
-          file = paste0(
-            manuscript_directory, "source -- Raquel/msa_", paste0(unique(unitorders_df$group), collapse = ""),
-            "_alignment_lengths_repeat_units.tsv"
-          ),
-          quote = F, sep = "\t", row.names = F
-        )
-    }
   }
 
   if (plotVariabilityScore) {
@@ -294,8 +277,6 @@ call_consensus_sequence <- function(unitorders_df, unit_frequency_df) {
 
   # Reverse the order of the units and collapse this list into a string
   consensus_seq_as_string <- paste(rev(consensus_seq_as_list), collapse = "")
-  # Remove gaps from this sequence, gaps that are left represent insertion with a frequency of at most 15%
-  # consensus_seq_as_string <- gsub('-', '—', consensus_seq_as_string)
 
   return(list(consensus_seq_as_string, unitorders_wide_df))
 }
@@ -389,7 +370,7 @@ plot_fractional_abundance <- function(unitorders_group, unit_color_msa_df) {
 } # useful for plotting fractional abundance of one consensus sequence
 
 #' @export
-make_repeat_summary_figure <- function(unitorders_group, ..., unit_color_msa_df, ascii_conversion_df, unit_frequency_df, manuscript_directory) {
+make_repeat_summary_figure <- function(unitorders_group, ..., unit_color_msa_df, ascii_conversion_df, unit_frequency_df) {
   unitorders_dfs <- list(unitorders_group, ...)
   # Call consensus
   # Calculate fractional abundance and put in df unit_occurrences_by_position_dfs
@@ -585,29 +566,7 @@ make_repeat_summary_figure <- function(unitorders_group, ..., unit_color_msa_df,
       )
     # o <- o + patchwork::plot_spacer() + patchwork::plot_layout(widths= c(relative_widths[grp], 1-relative_widths[grp]))
 
-    # After plotting, save length of each consensus as in-place table
-    consensus %>%
-      subset(seq != "-") %>%
-      dplyr::select(source, seq) %>%
-      dplyr::group_by(source) %>%
-      dplyr::count() %>%
-      magrittr::set_colnames(c("Type", "Length (repeat units)")) %>%
-      write.table(
-        file = paste0(manuscript_directory, "source -- Raquel/Repeat_type_summary_consensus_lengths_repeat_units.tsv"),
-        quote = F, sep = "\t", row.names = F
-      )
 
-    # Save length of alignments by Type as in-place table
-    unit_occurrence_by_position %>%
-      dplyr::select(source, position) %>%
-      dplyr::distinct() %>%
-      dplyr::group_by(source) %>%
-      dplyr::count() %>%
-      magrittr::set_colnames(c("Type", "Alignment length including gaps (repeat units)")) %>%
-      write.table(
-        file = paste0(manuscript_directory, "source -- Raquel/Repeat_type_summary_alignment_lengths_repeat_units.tsv"),
-        quote = F, sep = "\t", row.names = F
-      )
 
     return(o)
   }
