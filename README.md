@@ -1,9 +1,5 @@
 # analyzeRepeatSequences
-Analyze CACNA1C repeat sequences. This package involves:
-  - Visualizing a multiple sequence alignment of repetitive sequences.
-  - Summarizing a multiple sequence alignment into stacked bar plot of repeat unit frequencies.
-  - Calculating a consensus sequence from related sequences.
-  - Determining variable segments of repetitive sequences. Each color corresponds to a distinct repeat unit sequence.
+
 
 Input file formats:
 
