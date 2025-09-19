@@ -27,7 +27,7 @@ To install:
         devtools::install_github("ramoya/analyzeRepeatSequences")
               
               
-Preprint: https://www.medrxiv.org/content/10.1101/2024.03.05.24303780v2
+Paper: https://doi.org/10.1073/pnas.2415650122
 
               
 
