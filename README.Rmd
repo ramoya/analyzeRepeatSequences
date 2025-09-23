@@ -19,6 +19,7 @@ knitr::opts_chunk$set(
 <!-- badges: end -->
 
 This package involves:
+
   * Visualizing a multiple sequence alignment of repetitive sequences.
   * Summarizing a multiple sequence alignment into stacked bar plot of repeat unit frequencies.
   * Calculating a consensus sequence from related sequences.

@@ -7,11 +7,13 @@
 
 <!-- badges: end -->
 
-This package involves: \* Visualizing a multiple sequence alignment of
-repetitive sequences. \* Summarizing a multiple sequence alignment into
-stacked bar plot of repeat unit frequencies. \* Calculating a consensus
-sequence from related sequences. \* Determining variable segments of
-repetitive sequences.
+This package involves:
+
+- Visualizing a multiple sequence alignment of repetitive sequences.
+- Summarizing a multiple sequence alignment into stacked bar plot of
+  repeat unit frequencies.
+- Calculating a consensus sequence from related sequences.
+- Determining variable segments of repetitive sequences.
 
 Steps preceding use of this package: 1. Run Tandem Repeats Finder
 <https://tandem.bu.edu/trf/trf.html> to identify input sequences. 2.
