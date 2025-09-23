@@ -12,7 +12,7 @@ alignment. Has columns \code{character}, \code{sample}, \code{count}, \code{seq}
 dataset \code{unitorders_example} for format.}
 }
 \value{
-a two-column \code{data.frame} with columns \code{y} (variability scores) and
+a \code{data.frame} summarizing the distinct sequences with columns \code{y} (variability scores) and
 \code{x} (alignment positions)
 }
 \description{

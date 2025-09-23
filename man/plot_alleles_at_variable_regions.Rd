@@ -32,5 +32,7 @@ For visualizing the unique sequences within variable regions identified by
 \code{summarize_variable_regions}.
 }
 \examples{
-plot_alleles_at_variable_regions(vr_alleles_summarized_example, unit2ascii_df = unit2ascii, unit2color_df = unit2color)
+plot_alleles_at_variable_regions(vr_alleles_summarized_example,
+                                 unit2ascii_df = unit2ascii,
+                                 unit2color_df = unit2color)
 }

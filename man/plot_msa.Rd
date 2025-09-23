@@ -11,7 +11,6 @@ plot_msa(
   showLegend = F,
   plotSubgroups = F,
   plotVariabilityScore = F,
-  plotVariableRegion = F,
   plotMinMax = F
 )
 }
@@ -50,10 +49,10 @@ Plots the alignment of multiple repetitive sequences.
 }
 \examples{
 plot_msa(unitorders_example, unit2color)
-plot_msa(unitorders_example, unit2color, unitsToHighlight = c("GATCCTGACCTTACTAGTTTACAATCACAG", "GACCCTGACCTGACTAGTTTACAATCACAT"))
-plot_msa(unitorders_example, unit2color, showLegend = T)
-plot_msa(unitorders_example, unit2color, showLegend = T) + theme(axis.text.y = element_text())
-plot_msa(unitorders_withSubgroups_example, unit2color, plotSubgroups = T)
-plot_msa(unitorders_example, unit2color, plotVariabilityScore = T)
-plot_msa(unitorders_example, unit2color, plotMinMax = T)
+plot_msa(unitorders_example, unit2color, unitsToHighlight = c("GATCCTGACCTTACTAGTTTACAATCACAG",
+                                                              "GACCCTGACCTGACTAGTTTACAATCACAT"))
+plot_msa(unitorders_example, unit2color, showLegend = TRUE)
+plot_msa(unitorders_withSubgroups_example, unit2color, plotSubgroups = TRUE)
+plot_msa(unitorders_example, unit2color, plotVariabilityScore = TRUE)
+plot_msa(unitorders_example, unit2color, plotMinMax = TRUE)
 }

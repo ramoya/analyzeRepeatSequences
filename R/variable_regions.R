@@ -83,8 +83,9 @@ calculate_variability_score <- function(unitorders_df) {
 
 #' Summarize alleles at variable region
 #'
-#' @description Defines the two most common sequences as two alleles within a
-#'   variable region. Calculates the edit distance between these alleles the
+#' @description Called by `summarize_variable_regions`.
+#'   Defines the two most common sequences as two alleles within a
+#'   variable region. Calculates the edit distance between these alleles and the
 #'   other sequences within the variable region. With this, users can set edit
 #'   distance thresholds to assign each sequence to an allele.
 #'
@@ -99,11 +100,10 @@ calculate_variability_score <- function(unitorders_df) {
 #'   `unitorders_variableregion_example` for format.
 #' @param positions_list            Vector of positions defined as a variable region. See dataset `positions_list` for format.
 #'
-#' @returns a two-column `data.frame` with columns `y` (variability scores) and
-#'   `x` (alignment positions)
+#' @returns a `data.frame` summarizing the unique sequences of a variable region.
 #'
 #' @examples
-#' calculate_variability_score(unitorders_example)
+#' summarize_variable_region(unitorders_variableregion_example, positions_list)
 #' @export
 summarize_variable_region <- function(vr_unitorders_df, positions_list) {
   # Define the length of the most common unit
@@ -118,6 +118,10 @@ summarize_variable_region <- function(vr_unitorders_df, positions_list) {
   # Define function to reverse each string in a column
   strReverse <- function(x) {
     sapply(lapply(strsplit(x, NULL), rev), paste, collapse = "")
+  }
+
+  if(!"group" %in% names(vr_unitorders_df)){
+    vr_unitorders_df$group <- 1
   }
 
   # Summarize alleles
@@ -271,9 +275,25 @@ summarize_variable_region <- function(vr_unitorders_df, positions_list) {
   return(alleles_at_variable_region_edit_dist_df)
 }
 
+#' Summarize alleles at all variable regions within a multiple sequence alignment
+#'
+#' @description Defines variable regions by variability score. Formats the input
+#'   variable region sequences to `summarize_variable_region`.
+#'
+#'
+#' @param unitorders_df         `data.frame` of a parsed multiple sequence
+#'   alignment. Has columns `character`, `sample`, `count`, `seq`, `gp`. See
+#'   dataset `unitorders_example` for format.
+#' @param threshold            Threshold for variability score (range 0-1) to use for defining variable regions.
+#'
+#' @returns Named list with two elements.
+#'   allele_dfs: List of `data.frame`, one per variable region. Each row is a unique sequence of a variable region.
+#'   positions_lists: List of vectors defining the positions of the multiple sequences alignment that are variable regions.
+#' @examples
+#' summarize_variable_regions(unitorders_example, threshold = 0.25)
 #' @export
 summarize_variable_regions <- function(unitorders_df, threshold) {
-  threshold_variability <- threshold #variability score threshold
+  threshold_variability <- threshold
 
   unitorders_df$seq[unitorders_df$seq == ""] <- strrep("-", 30)
 
@@ -285,9 +305,8 @@ summarize_variable_regions <- function(unitorders_df, threshold) {
   variability_score_df[variability_score_df$y > threshold_variability, "detect_runs"] <- 1
 
   # Detect length of runs.
-  #NB doesn't specifically know to detect 1s.
   runs <- rle(variability_score_df$detect_runs)
-  # Summarize lengths of runs in df
+  # Summarize lengths of runs.
   end <- cumsum(runs$lengths)
   start <- c(1, dplyr::lag(end)[-1] + 1)
   run_lengths_df <- data.frame(start, end)
@@ -295,13 +314,15 @@ summarize_variable_regions <- function(unitorders_df, threshold) {
   variable_region_positions <- apply(variable_regions_boundaries_df, 1, function(x) {
     seq(x["start"], x["end"])
   }) # the names of this nested list are the row numbers where the range is defined
+
   # Assign position
   unitorders_with_position_df <- as.data.frame(unitorders_df %>% dplyr::group_by(sample) %>% dplyr::mutate(position = rev(1:dplyr::n())))
-  #Keep variable region positions
+  #Subset to variable region positions
   variable_region_unitorders_df <- lapply(seq(variable_region_positions), function(x) {
     unitorders_with_position_df[unitorders_with_position_df$position %in% variable_region_positions[[x]], ]
   }) #This is a nested list of dfs
 
+  #For each variable region, summarize its alleles
   alleles_at_variable_regions_df <- mapply(
     summarize_variable_region,
     variable_region_unitorders_df,
@@ -335,7 +356,9 @@ summarize_variable_regions <- function(unitorders_df, threshold) {
 #' @returns ggplot object showing the alignment of each unique sequence within a
 #'   variable region.
 #' @examples
-#' plot_alleles_at_variable_regions(vr_alleles_summarized_example, unit2ascii_df = unit2ascii, unit2color_df = unit2color)
+#' plot_alleles_at_variable_regions(vr_alleles_summarized_example,
+#'                                  unit2ascii_df = unit2ascii,
+#'                                  unit2color_df = unit2color)
 
 #' @export
 #' @import ggplot2

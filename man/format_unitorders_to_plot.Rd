@@ -20,7 +20,7 @@ color. All other repeat units are shown in beige. Defaults to a zero length
 vector.}
 }
 \value{
-a list of length 4 with the objects used to plot.
+a list of length 4 of objects used for plotting by \code{plot_msa}
 }
 \description{
 Formats \code{unitorders_df} for plotting.

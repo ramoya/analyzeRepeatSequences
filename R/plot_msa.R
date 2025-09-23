@@ -28,12 +28,12 @@
 #' @returns ggplot object showing the alignment of multiple repetitive sequences.
 #' @examples
 #' plot_msa(unitorders_example, unit2color)
-#' plot_msa(unitorders_example, unit2color, unitsToHighlight = c("GATCCTGACCTTACTAGTTTACAATCACAG", "GACCCTGACCTGACTAGTTTACAATCACAT"))
-#' plot_msa(unitorders_example, unit2color, showLegend = T)
-#' plot_msa(unitorders_example, unit2color, showLegend = T) + theme(axis.text.y = element_text())
-#' plot_msa(unitorders_withSubgroups_example, unit2color, plotSubgroups = T)
-#' plot_msa(unitorders_example, unit2color, plotVariabilityScore = T)
-#' plot_msa(unitorders_example, unit2color, plotMinMax = T)
+#' plot_msa(unitorders_example, unit2color, unitsToHighlight = c("GATCCTGACCTTACTAGTTTACAATCACAG",
+#'                                                               "GACCCTGACCTGACTAGTTTACAATCACAT"))
+#' plot_msa(unitorders_example, unit2color, showLegend = TRUE)
+#' plot_msa(unitorders_withSubgroups_example, unit2color, plotSubgroups = TRUE)
+#' plot_msa(unitorders_example, unit2color, plotVariabilityScore = TRUE)
+#' plot_msa(unitorders_example, unit2color, plotMinMax = TRUE)
 
 #' @export
 #' @import ggplot2
@@ -43,11 +43,10 @@ plot_msa <- function(unitorders_df,
                      showLegend = F,
                      plotSubgroups = F,
                      plotVariabilityScore = F,
-                     plotVariableRegion = F,
                      plotMinMax = F) {
 
-  if(plotSubgroups == T & (plotVariabilityScore == T | plotMinMax == T)){
-    stop("plotSubgroups=T not compatible with neither plotVariabilityScore=T nor plotMinMax=T")
+  if(plotSubgroups == TRUE & (plotVariabilityScore == TRUE | plotMinMax == TRUE)){
+    stop("plotSubgroups=TRUE not compatible with neither plotVariabilityScore=TRUE nor plotMinMax=TRUE")
   }
 
   l <- format_unitorders_to_plot(unitorders_df, unit2color_df,
@@ -100,7 +99,6 @@ plot_msa <- function(unitorders_df,
       color = guide_legend(override.aes = list(size = 2)),
       fill = guide_legend(title.position = "top")
     ) +
-    ##LEFT OFF HERE DO I NEED TO BE DROPPING THE LAST ROW??
     scale_fill_manual(
       breaks = ranked_units_in_plot[1:leng],
       values = ranked_colors_in_plot,
@@ -205,9 +203,7 @@ plot_msa <- function(unitorders_df,
 #'   color. All other repeat units are shown in beige. Defaults to a zero length
 #'   vector.
 #'
-#' @returns a list of length 4 with the objects used to plot.
-
-
+#' @returns a list of length 4 of objects used for plotting by `plot_msa`
 #' @export
 format_unitorders_to_plot <- function(unitorders_df,
                                       unit2color_df,
@@ -229,7 +225,7 @@ format_unitorders_to_plot <- function(unitorders_df,
     dplyr::group_by(seq) %>%
     dplyr::summarize(count = dplyr::n())
 
-  print(unit_counts_calculated, n=50)
+  #print(unit_counts_calculated, n=50)
 
   # Add column for color
   if (length(unitsToHighlight) != 0) {
@@ -255,7 +251,7 @@ format_unitorders_to_plot <- function(unitorders_df,
 
 
 
-  print(unit_counts_calculated_plus_colors_reordered)
+  #print(unit_counts_calculated_plus_colors_reordered)
   ranked_colors_in_plot <- unit_counts_calculated_plus_colors_reordered$color
   ranked_units_in_plot <- unit_counts_calculated_plus_colors_reordered$seq
 

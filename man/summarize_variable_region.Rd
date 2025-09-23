@@ -8,22 +8,26 @@ summarize_variable_region(vr_unitorders_df, positions_list)
 }
 \arguments{
 \item{vr_unitorders_df}{\code{data.frame} of a parsed multiple sequence
-alignment within the positions defined as variable regions by \code{summarize_variable_regions}.
-Has columns \code{character}, \code{sample}, \code{count}, \code{seq}, \code{gp}. See dataset \code{unitorders_example} for format.}
+alignment within the positions defined as a variable region by
+\code{summarize_variable_regions}. Has columns \code{character}, \code{sample}, \code{count},
+\code{seq}, \code{gp}, \code{group}, \code{position}. See dataset
+\code{unitorders_variableregion_example} for format.}
+
+\item{positions_list}{Vector of positions defined as a variable region. See dataset \code{positions_list} for format.}
 }
 \value{
-a two-column \code{data.frame} with columns \code{y} (variability scores) and
-\code{x} (alignment positions)
+a \code{data.frame} summarizing the unique sequences of a variable region.
 }
 \description{
-Defines the most common sequence and the second most common sequence
-as two alleles within a variable region. Calculates the edit distance between these
-alleles the other sequences within the variable region. With this, users can use
-edit distance thresholds to assign each sequence to an allele.
+Called by \code{summarize_variable_regions}.
+Defines the two most common sequences as two alleles within a
+variable region. Calculates the edit distance between these alleles and the
+other sequences within the variable region. With this, users can set edit
+distance thresholds to assign each sequence to an allele.
 
 Note: This function defines exactly two alleles. There may be more
 alleles that have high edit distances to both.
 }
 \examples{
-calculate_variability_score(unitorders_example)
+summarize_variable_region(unitorders_variableregion_example, positions_list)
 }

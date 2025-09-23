@@ -13,44 +13,35 @@ make_repeat_summary_figure(
 )
 }
 \arguments{
+\item{unitorders_group}{\code{data.frame} of a parsed multiple sequence
+alignment for a group of sequences. Has columns \code{character}, \code{sample}, \code{count}, \code{seq}, \code{gp}. See
+dataset \code{unitorders_group1} for format.}
+
+\item{...}{Optional additional \code{unitorders_group} \code{data.frame}s.}
+
 \item{unit2color_df}{\code{data.frame} of the conversion between repeat
 units and colors. Has columns \code{seq}, \code{color}. See dataset \code{unit2color} for
 format.}
 
-\item{unitorders_df}{\code{data.frame} of a parsed multiple sequence
-alignment. Has columns \code{character}, \code{sample}, \code{count}, \code{seq}, \code{gp}. See
-dataset \code{unitorders_example} for format.}
+\item{unit2ascii_df}{\code{data.frame} of the conversion
+between repeat units and single ASCII characters. Has columns \code{seq},
+\code{character}. See dataset \code{unit2ascii} for format.}
 
-\item{unitsToHighlight}{Vector of selected repeat units to show in
-color. All other repeat units are shown in beige. Defaults to a zero length
-vector.}
-
-\item{showLegend}{\code{logical} indicating whether to plot the legend.
-Defaults to FALSE.}
-
-\item{plotSubgroups}{\code{logical} indicating whether \code{unitorders_df} has
-column \code{group} for clustering the sequences. Defaults to FALSE. Not
-compatible with neither plotVariabilityScore=T nor plotMinMax=T.}
-
-\item{plotVariabilityScore}{\code{logical} indicating whether to plot a score
-across the alignment representing repeat unit variability. See
-\code{calculate_variability_score} for details. Returns a list of two ggplot objects.}
-
-\item{plotMinMax}{\code{logical} indicating whether to show x-axis
-ticks at the first and last repeat units.}
+\item{unit_frequency_df}{\code{data.frame}cataloging all repeat units observed in
+the dataset and their frequency. Has columns \code{seq}, \code{count}, \code{samples}, \code{no_samples}, \code{unit_length}.
+See dataset \code{unit_frequency_example} for format.}
 }
 \value{
-ggplot object showing the alignment of multiple repetitive sequences.
+ggplot object of several multiple sequence alignments on the same x-axis scale, arranged vertically.
 }
 \description{
-\code{make_repeat_summary_figure} is a plotting function to show the alignment of multiple repetitive sequences.
+\code{make_repeat_summary_figure} is a plotting function to summarize more than one
+multiple sequence alignment and their consensus sequences.
 }
 \examples{
-plot_msa(unitorders_example, unit2color)
-plot_msa(unitorders_example, unit2color, unitsToHighlight = c("GATCCTGACCTTACTAGTTTACAATCACAG", "GACCCTGACCTGACTAGTTTACAATCACAT"))
-plot_msa(unitorders_example, unit2color, showLegend = T)
-plot_msa(unitorders_example, unit2color, showLegend = T) + theme(axis.text.y = element_text())
-plot_msa(unitorders_withSubgroups_example, unit2color, plotSubgroups = T)
-plot_msa(unitorders_example, unit2color, plotVariabilityScore = T)
-plot_msa(unitorders_example, unit2color, plotMinMax = T)
+make_repeat_summary_figure(unitorders_group1_example,
+                           unitorders_group2_example,
+                           unit2color_df = unit2color,
+                           unit2ascii_df = unit2ascii,
+                           unit_frequency_df = unit_frequency_example)
 }
