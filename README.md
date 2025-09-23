@@ -105,6 +105,9 @@ devtools::install_github("ramoya/analyzeRepeatSequences")
 Example visualization of a multiple sequence alignment. Each color is a
 unique repeat unit. Alignment gaps are shown in black.
 
-    #> Joining by: seq
+``` r
+analyzeRepeatSequences::plot_msa(analyzeRepeatSequences::unitorders_example, analyzeRepeatSequences::unit2color)
+#> Joining by: seq
+```
 
 <img src="man/figures/README-plot_msa_example-1.png" width="100%" />
