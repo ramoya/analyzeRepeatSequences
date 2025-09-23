@@ -15,12 +15,15 @@ This package involves:
 - Calculating a consensus sequence from related sequences.
 - Determining variable segments of repetitive sequences.
 
-Steps preceding use of this package: 1. Run Tandem Repeats Finder
-<https://tandem.bu.edu/trf/trf.html> to identify input sequences. 2.
-Parse repetitive sequences into repeat units. 3. Group infrequent repeat
-units into single categories. 4. Convert each repeat unit to a single
-character. 5. Perform multiple sequence alignment. 6. Convert alignment
-to table according to format below.
+Steps preceding use of this package:
+
+1.  Run Tandem Repeats Finder <https://tandem.bu.edu/trf/trf.html> to
+    identify input sequences.
+2.  Parse repetitive sequences into repeat units.
+3.  Group infrequent repeat units into single categories.
+4.  Convert each repeat unit to a single character.
+5.  Perform multiple sequence alignment.
+6.  Convert alignment to table according to format below.
 
 The output table from step 6 above has the following format:
 

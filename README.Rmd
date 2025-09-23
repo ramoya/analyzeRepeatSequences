@@ -26,6 +26,7 @@ This package involves:
   * Determining variable segments of repetitive sequences.
   
 Steps preceding use of this package:
+
   1. Run Tandem Repeats Finder https://tandem.bu.edu/trf/trf.html to identify
      input sequences.
   2. Parse repetitive sequences into repeat units.
