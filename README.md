@@ -87,8 +87,8 @@ directory.
 ## Citation
 
 R. Moya, X. Wang, R. W. Tsien, M. T. Maurano, Structure of a polymorphic
-repeat at the CACNA1C schizophrenia locus. PNAS (2025). Available at:
-<https://doi.org/10.1073/pnas.241565012>
+repeat at the CACNA1C schizophrenia locus. PNAS (2025).
+[Paper](https://doi.org/10.1073/pnas.2415650122)
 
 ## Installation
 
