@@ -93,6 +93,7 @@ call_consensus_sequence <- function(unitorders_df, unit_frequency_df, unit2ascii
 # Convert a consensus sequence into `unitorders_df` format.
 #' @export
 #' @keywords internal
+#' @noRd
 make_unitorders_consensus <- function(consensus_seq_as_string, unit2ascii_df) {
   # Expand string to list of characters
   consensus_seq_as_list <- rev(unlist(strsplit(consensus_seq_as_string, "")))
